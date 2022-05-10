@@ -1,186 +1,187 @@
 
-<script>
-        const foldingData = [{},{}]
-        const foldedData = [{},{}]
-        const nodeData = {}
-        let depth = 5;
-        let current = ""
-        const t = {
-            updateDepth : () => {
-                depth = Number(document.querySelector("#depthInput").value)
-                t.updateScreen();
-            },
-            refineData : () => {
-                originData.edgeList.map(x => {
-                    const vh = x.data.linkType == "spacing"?1:0;
-                    util.forcePush(foldedData[vh], x.data.source, x.data.target)
-                    util.forcePush(foldingData[vh], x.data.target, x.data.source)
-                })
-                originData.nodeList.map(x => {
-                    nodeData[x.data.id] = x
-                })
-                console.log(foldingData)
-                console.log(foldedData)
-            },
-            selectNode : (id) => {
-                current = id;
-                t.updateScreen();
-            },
-            updateScreen : () => {
-                const neighbors = t.filterUniqueNodes(t.findNearNodes(current, [], "", depth, []));
-                t.displayNodeByDist(t.sortNodesByDist(neighbors, depth))
-                t.displayNodeByGrid(neighbors)
-            },
-            displayNodeByDist : (nodes) => {
-                let output = "<table id=list><tr><td>Path</td><td>ID</td><td>FoldName</td></tr>";
-                for(let i=0; i<nodes.length; i++){
-                    output += `<tr><td class=dist colspan=3>Dist ${i}</td></tr>`
-                    nodes[i].map(x => {
-                        output += `<tr><td>${x[1]}</td><td>${x[0]}</td><td>${nodeData[x[0]].data.foldNode.title}</td></tr>`
-                    })
+<script>const foldingData = [{},{}]
+const foldedData = [{},{}]
+const nodeData = {}
+let depth = 5;
+let current = ""
+const t = {
+    updateDepth : () => {
+        depth = Number(document.querySelector("#depthInput").value)
+        t.updateScreen();
+    },
+    refineData : () => {
+        originData.edgeList.map(x => {
+            const vh = x.data.linkType == "spacing"?1:0;
+            util.forcePush(foldedData[vh], x.data.source, x.data.target)
+            util.forcePush(foldingData[vh], x.data.target, x.data.source)
+        })
+        originData.nodeList.map(x => {
+            nodeData[x.data.id] = x
+        })
+        console.log(foldingData)
+        console.log(foldedData)
+    },
+    selectNode : (id) => {
+        current = id;
+        t.updateScreen();
+    },
+    updateScreen : () => {
+        const neighbors = t.filterUniqueNodes(t.findNearNodes(current, [], "", depth, []));
+        t.displayNodeByDist(t.sortNodesByDist(neighbors, depth))
+        t.displayNodeByGrid(neighbors)
+    },
+    displayNodeByDist : (nodes) => {
+        let output = "<table id=list><tr><td>Path</td><td>ID</td><td>FoldName</td></tr>";
+        for(let i=0; i<nodes.length; i++){
+            output += `<tr><td class=dist colspan=3>Dist ${i}</td></tr>`
+            nodes[i].map(x => {
+                output += `<tr><td>${x[1]}</td><td>${x[0]}</td><td>${nodeData[x[0]].data.foldNode.title}</td></tr>`
+            })
+        }
+        output += "</table>";
+        document.querySelector("#disp2").innerHTML = output
+    },
+    displayNodeByGrid : (nodes) => {
+        const nodePos = {}
+        nodes.map(x => {
+            const coord = t.determinePosition(x[1]);
+            if(!nodePos[coord[0]]){nodePos[coord[0]] = {}}
+            util.forcePush(nodePos[coord[0]], coord[1], x)
+        })
+        let output = `<table id=map>`;
+            for(let i=depth*-1; i<=depth; i++){
+                output += `<tr>`
+                for(let j=depth*-1; j<=depth; j++){
+                    output += `<td${i==0 && j==0 ? " class=center":""}><div class=loca>${i},${j}</div><div class=list>${(nodePos[i] && nodePos[i][j])?nodePos[i][j].map(x => `<div${i!=0||j!=0?` class=link onclick=t.selectNode("${x[0]}")`:""}>(${x[1]}) ${nodeData[x[0]].data.foldNode.title}</div>`).join(""):""}</div></td>`
+            }
+            output += `</tr>`
+        }
+        output += "</table>";
+        document.querySelector("#disp").innerHTML = output
+    },
+    determinePosition : (path) => {
+        const coord = [0,0]
+        if(path){
+            path.split("").map(dir => {
+                switch(dir){
+                    case 'U' : coord[0]--; break;
+                    case 'D' : coord[0]++; break;
+                    case 'L' : coord[1]--; break;
+                    case 'R' : coord[1]++; break;
                 }
-                output += "</table>";
-                document.querySelector("#disp2").innerHTML = output
-            },
-            displayNodeByGrid : (nodes) => {
-                const nodePos = {}
-                nodes.map(x => {
-                    const coord = t.determinePosition(x[1]);
-                    if(!nodePos[coord[0]]){nodePos[coord[0]] = {}}
-                    util.forcePush(nodePos[coord[0]], coord[1], x)
-                })
-                let output = `<table id=map>`;
-                for(let i=depth*-1; i<=depth; i++){
-                    output += `<tr>`
-                    for(let j=depth*-1; j<=depth; j++){
-                        output += `<td${i==0 && j==0 ? " class=center":""}><div class=loca>${i},${j}</div><div class=list>${(nodePos[i] && nodePos[i][j])?nodePos[i][j].map(x => `<div${i!=0||j!=0?` class=link onclick=t.selectNode("${x[0]}")`:""}>(${x[1]}) ${nodeData[x[0]].data.foldNode.title}</div>`).join(""):""}</div></td>`
-                    }
-                    output += `</tr>`
-                }
-                output += "</table>";
-                document.querySelector("#disp").innerHTML = output
-            },
-            determinePosition : (path) => {
-                const coord = [0,0]
-                if(path){
-                    path.split("").map(dir => {
-                        switch(dir){
-                            case 'U' : coord[0]--; break;
-                            case 'D' : coord[0]++; break;
-                            case 'L' : coord[1]--; break;
-                            case 'R' : coord[1]++; break;
-                        }
-                    })
-                }
-                return coord;
-            },
-            sortNodesByDist : (nodes, limit) => {
-                const result = [];
-                nodes.map(x => {
-                    util.forcePush(result, limit - x[2], [x[0], x[1]])
-                })
-                return result
-            },
-            filterUniqueNodes : (nodes) => {
-                const temp = {}
-                nodes.map(x => {
-                    const oldData = temp[x[0]];
-                    if(!temp[x[0]] || temp[x[0]][2] < x[2]){
-                        temp[x[0]] = x
-                    }
-                })
-                const result = []
-                Object.keys(temp).map(key => {
-                    result.push(temp[key])
-                })
-                return result
-            },
-            findNearNodes : (curr, arr, path, limit, route) => {
-                const result = [[curr, path, limit]];
-                if(limit == 0){return result;}
+            })
+        }
+        return coord;
+    },
+    sortNodesByDist : (nodes, limit) => {
+        const result = [];
+        nodes.map(x => {
+            util.forcePush(result, limit - x[2], [x[0], x[1]])
+        })
+        return result
+    },
+    filterUniqueNodes : (nodes) => {
+        const temp = {}
+        nodes.map(x => {
+            const oldData = temp[x[0]];
+            if(!temp[x[0]] || temp[x[0]][2] < x[2]){
+                temp[x[0]] = x
+            }
+        })
+        const result = []
+        Object.keys(temp).map(key => {
+            result.push(temp[key])
+        })
+        return result
+    },
+    findNearNodes : (curr, arr, path, limit, route) => {
+        const result = [[curr, path, limit]];
+        if(limit == 0){return result;}
         
-                if(foldingData[0][curr] && path.slice(-1) != 'D'){
-                    foldingData[0][curr].map(x => result.push(...t.findNearNodes(x, arr, `${path}U`, limit-1, [...route, curr])))
-                }
-                
-                if(foldingData[1][curr] && path.slice(-1) != 'R'){
-                    foldingData[1][curr].map(x => result.push(...t.findNearNodes(x, arr, `${path}L`, limit-1, [...route, curr])))
-                }
-                
-                if(foldedData[0][curr]){
-                    foldedData[0][curr].map(x => !route.includes(x)?result.push(...t.findNearNodes(x, arr, `${path}D`, limit-1, [...route, curr])):"")
-                }
-                
-                if(foldedData[1][curr] && path.slice(-1) != 'L'){
-                    foldedData[1][curr].map(x => result.push(...t.findNearNodes(x, arr, `${path}R`, limit-1, [...route, curr])))
-                }
-                return result
-            },
-            randomNode : () => {
-                while(true){
-                    const id = Math.floor(Math.random() * originData.nodeList.length);
-                    if(originData.nodeList[id].data.foldNode.bridge.vFolding.enable 
-                    || originData.nodeList[id].data.foldNode.bridge.hFolding.enable){
-                        t.selectNode(originData.nodeList[id].data.id);
-                        break;
-                    }
-                }
-            },
-            measurePerformance : (func, args) => {
-                if(!args){args = []}
-                const start = +new Date()
-                func(...args);
-                const elapsed = +new Date() - start
-                console.log(elapsed)
+        if(foldingData[0][curr] && path.slice(-1) != 'D'){
+            foldingData[0][curr].map(x => result.push(...t.findNearNodes(x, arr, `${path}U`, limit-1, [...route, curr])))
+        }
+        
+        if(foldingData[1][curr] && path.slice(-1) != 'R'){
+            foldingData[1][curr].map(x => result.push(...t.findNearNodes(x, arr, `${path}L`, limit-1, [...route, curr])))
+        }
+        
+        if(foldedData[0][curr]){
+            foldedData[0][curr].map(x => !route.includes(x)?result.push(...t.findNearNodes(x, arr, `${path}D`, limit-1, [...route, curr])):"")
+        }
+        
+        if(foldedData[1][curr] && path.slice(-1) != 'L'){
+            foldedData[1][curr].map(x => result.push(...t.findNearNodes(x, arr, `${path}R`, limit-1, [...route, curr])))
+        }
+        return result
+    },
+    randomNode : () => {
+        while(true){
+            const id = Math.floor(Math.random() * originData.nodeList.length);
+            if(originData.nodeList[id].data.foldNode.bridge.vFolding.enable 
+            || originData.nodeList[id].data.foldNode.bridge.hFolding.enable){
+                t.selectNode(originData.nodeList[id].data.id);
+                break;
             }
         }
-        const util = {
-            forcePush : (arr, key, data) => {
-                if(!arr[key]){arr[key] = []}
-                arr[key].push(data)
-            }
-        }
-        
-        window.onload = () => {
-            t.measurePerformance(t.refineData);
-            t.randomNode()
-        }
-        </script>
-        
-        <style>
-        html {font-size:9pt; background-color:#000; color:#fff;}
-        #header {position:fixed; top:12px; left:12px; width:100%; height:72px; border-bottom:1px dashed #666;}
-        .backplate {position:absolute; top:0px; left:0px; width:100%; height:100%; background-color:#000; opacity:0.8; z-index:0;}
-        .frontplate {position:absolute; top:12px; left:12px; width:100%; height:100%; z-index:1;}
-        td{ font-size:9pt;}
-        #map td {width:128px; height:128px; font-size:9pt;}
-        #map td.center {border:1px dashed #333;}
-        #map td .loca {width:128px; height:32px;}
-        #map td .list {width:128px; height:96px; 
-          overflow: hidden; 
-          text-overflow: ellipsis;
-          white-space: nowrap;}
-        .link:hover{color:#999;}
-        
-        #list {border-spacing:0px;}
-        #list tr:first-child{text-align:center;}
-        #list td.dist{padding-left:24px; background-color:#111}
-        #list td{border-spacing:0; padding:4 8px; border-right:1px dashed #333; border-bottom:1px solid #333}
-        #list td:first-child{width:64px;}
-        #list td:nth-child(2){width:160px;}
-        #list td:nth-child(3){width:480px;}
-        </style>
-        
-        <div id=header>
-            <div class=backplate></div>
-            <div class=frontplate>
-                Origin <br>
-                Depth <input id=depthInput type=text size=2 value=5 onkeyup=t.updateDepth()><br>
-                <div class=button onClick=t.randomNode()>Move to Random Node</div>
-            </div>
-        </div>
-        <div id=disp></div>
-        <div id=disp2></div>
+    },
+    measurePerformance : (func, args) => {
+        if(!args){args = []}
+        const start = +new Date()
+        func(...args);
+        const elapsed = +new Date() - start
+        console.log(elapsed)
+    }
+}
+const util = {
+    forcePush : (arr, key, data) => {
+        if(!arr[key]){arr[key] = []}
+        arr[key].push(data)
+    }
+}
+
+window.onload = () => {
+    t.measurePerformance(t.refineData);
+    t.randomNode()
+}
+</script>
+
+<style>
+html {font-size:9pt; background-color:#000; color:#fff;}
+#header {position:fixed; top:12px; left:12px; width:100%; height:72px; border-bottom:1px dashed #666;}
+.backplate {position:absolute; top:0px; left:0px; width:100%; height:100%; background-color:#000; opacity:0.8; z-index:0;}
+.frontplate {position:absolute; top:12px; left:12px; width:100%; height:100%; z-index:1;}
+td{ font-size:9pt;}
+#map td {width:128px; height:128px; font-size:9pt;}
+#map td.center {border:1px dashed #333;}
+#map td .loca {width:128px; height:32px;}
+#map td .list {
+    width:128px; height:96px; 
+    overflow: hidden; 
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.link:hover{color:#999;}
+
+#list {border-spacing:0px;}
+#list tr:first-child{text-align:center;}
+#list td.dist{padding-left:24px; background-color:#111}
+#list td{border-spacing:0; padding:4 8px; border-right:1px dashed #333; border-bottom:1px solid #333}
+#list td:first-child{width:64px;}
+#list td:nth-child(2){width:160px;}
+#list td:nth-child(3){width:480px;}
+</style>
+
+<div id=header>
+    <div class=backplate></div>
+    <div class=frontplate>
+        Origin <br>
+        Depth <input id=depthInput type=text size=2 value=5 onkeyup=t.updateDepth()><br>
+        <div class=button onClick=t.randomNode()>Move to Random Node</div>
+    </div>
+</div>
+<div id=disp></div>
+<div id=disp2></div>
 
 <script>
 const originData = {
