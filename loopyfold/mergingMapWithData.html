@@ -1,0 +1,480 @@
+<script src=./data.js charset=utf-8></script>
+<script>
+const PANEL_LIST = ["Control","Nodes","Twits","Galaxies"];
+
+let nodes = {};
+let twits = {};
+let galaxies = [];
+let lastPos;
+
+function convertData () {
+    folds.map(fold => {
+        nodes[fold.id] = {
+            id : fold.id,
+            title : fold.title,
+            size : 1,
+            ref : [],
+            connection : {}
+        }
+    })
+
+    const twitAmpleTo = document.getElementById("twitAmpleTo").value;
+    const twitAmpleFrom = document.getElementById("twitAmpleFrom").value;
+    const twitMentionProb = document.getElementById("twitMentionProb").value;
+    const twitMentionDim = document.getElementById("twitMentionDim").value;
+    edges.map(edge => {
+        const mentions = [edge.source, edge.target]
+        const base = twitAmpleFrom + parseInt(Math.random() * (twitAmpleTo - twitAmpleFrom + 1))
+        const dim = parseInt(base * Math.pow(twitMentionDim, mentions.length))
+        
+        for(let j=0; j<mentions.length; j++){
+            nodes[mentions[j]].ref.push(mentions[j]);
+            nodes[mentions[j]].size += dim;
+            for(let k=0; k<mentions.length; k++){
+                if(j==k){continue;}
+                if(!nodes[mentions[j]].connection[mentions[k]]){nodes[mentions[j]].connection[mentions[k]] = 0;}
+                nodes[mentions[j]].connection[mentions[k]] += dim;
+            }
+        }
+
+        twits[edge.id] = {
+            id : edge.id, 
+            mentions,
+            base,
+            dim
+        }
+    })
+
+    galaxies = extractGalaxy()
+    console.log(galaxies)
+
+    drawMap()
+}
+
+function generateNewSet () {
+    nodes = [];
+    for(let i=0; i<document.getElementById("newNodeCount").value; i++){
+        nodes.push({
+            id : i,
+            size : 1,
+            ref : [],
+            connection : {}
+        })
+    }
+
+    const twitAmpleTo = document.getElementById("twitAmpleTo").value;
+    const twitAmpleFrom = document.getElementById("twitAmpleFrom").value;
+    const twitMentionProb = document.getElementById("twitMentionProb").value;
+    const twitMentionDim = document.getElementById("twitMentionDim").value;
+    twits = [];
+    for(let i=0; i<document.getElementById("newTwitCount").value; i++){
+        let mentionCount = 1;
+        while(true){
+            if(Math.random() < twitMentionProb){
+                mentionCount++;
+                continue;
+            }
+            break;
+        }
+
+        const base = twitAmpleFrom + parseInt(Math.random() * (twitAmpleTo - twitAmpleFrom + 1))
+        const dim = parseInt(base * Math.pow(twitMentionDim, mentionCount-1))
+
+        const mentions = []
+        for(let j=0; j<mentionCount; j++){
+            mentions.push(parseInt(Math.random() * nodes.length))
+        }
+
+        for(let j=0; j<mentionCount; j++){
+            nodes[mentions[j]].ref.push(i);
+            nodes[mentions[j]].size += dim;
+            for(let k=0; k<mentionCount; k++){
+                if(j==k){continue;}
+                if(!nodes[mentions[j]].connection[mentions[k]]){nodes[mentions[j]].connection[mentions[k]] = 0;}
+                nodes[mentions[j]].connection[mentions[k]] += dim;
+            }
+        }
+        
+        twits.push({
+            id : i, 
+            mentions,
+            base,
+            dim
+        })
+    }
+
+    galaxies = extractGalaxy()
+
+    drawMap()
+}
+
+function extractGalaxy () {
+    const dead = {}
+    const queue = []
+    Object.keys(nodes).map(x => {queue.push(x)})
+
+    const result = [] // [head id, head size, total size, member]
+    for(let i=0; i<queue.length; i++){
+        if(dead[queue[i]]){continue;}
+
+        const members = getConnected(queue[i],{})
+        let head = [0,0];
+        let totalSize = 0
+        for(let j=0; j<members.length; j++){
+            const node = nodes[members[j]]
+            if(node.size > head[1]){
+                head = [node.id, node.size]
+            }
+            totalSize += node.size;
+            dead[members[j]] = 1;
+        }
+
+        result.push({
+            id : result.length,
+            head : head[0],
+            totalSize, 
+            members
+        })
+    }
+    
+    return result
+}
+
+function getConnected (start, dup) {
+    const result = [start]
+    if(nodes[start].connection.length == 0){return result}
+
+    dup[start] = 1;
+    Object.keys(nodes[start].connection).map(key => {
+        if(dup[key]){return;}
+        getConnected(key, dup).map(i => result.push(i))
+    })
+    return result
+}
+
+function drawNodeList () {
+    document.querySelector("#panel_Nodes>.disp").innerHTML = `<table><tr><td>ID</td><td>Size</td><td>RefBy</td><td>Connection</td></tr>
+    ${Object.keys(nodes).map(key => {
+        const node = nodes[key]
+        return `<tr><td>${node.id}</td><td>${node.size}</td><td>${node.ref.join(",")}</td><td>${Object.keys(node.connection).map(i => `${i} : ${node.connection[i]}`).join("<br>")}</td></tr>`
+    }
+    ).join('')}</table>`
+}
+
+function drawTwitList () {
+    document.querySelector("#panel_Twits>.disp").innerHTML = `<table><tr><td>ID</td><td>Base</td><td>Power</td><td>Mentions</td></tr>
+    ${Object.keys(twits).map(key => {
+        const twit = twits[key]
+        return `<tr><td>${twit.id}</td><td>${twit.base}</td><td>${twit.dim}</td><td>${twit.mentions.join(",")}</td></tr>`
+    }).join('')}</table>`
+}
+
+function drawGalaxyList () {
+    const total = galaxies.reduce((acc, x) => x.totalSize+acc, 0)
+
+    document.querySelector("#panel_Galaxies>.disp").innerHTML = `<table><tr><td>id</td><td>Head</td><td>Size</td><td>Member</td><td>Share(%)</td></tr>
+    ${galaxies.map(galaxy => 
+        `<tr><td>${galaxy.id}</td><td>${nodes[galaxy.head].title}</td><td>${galaxy.totalSize}</td><td>${galaxy.members.length}</td><td>${parseInt(galaxy.totalSize*10000/total)/100}</td></tr>`
+    ).join('')}</table>`
+}
+
+function switchMenu () {
+    const current = document.querySelector("#menuPanel").classList.contains("visible");
+
+    document.querySelector("#menuPanel").classList.toggle("visible");
+    if(current){
+        document.querySelector("#panelFrame").classList.remove("visible");
+        for(x of document.querySelectorAll("#panelFrame .panel")){x.classList.remove("visible")}
+    }
+}
+
+function switchPanel (panel) {
+    const current = document.querySelector("#panel_"+panel).classList.contains("visible");
+
+    if(current){
+        document.querySelector("#panelFrame").classList.remove("visible");
+        document.querySelector("#panel_"+panel).classList.remove("visible");
+    }else{
+        panelPreceed(panel);
+        document.querySelector("#panelFrame").classList.add("visible");
+        for(x of document.querySelectorAll("#panelFrame .panel")){x.classList.remove("visible")}
+        document.querySelector("#panel_"+panel).classList.add("visible");
+    }
+}
+
+function navigateMap (func, dir) {
+    switch(func){
+        case 'Galaxy':
+            lastPos = undefined
+            const galaxyDom = document.querySelector("#navFrame>div:nth-child(1)>div:nth-child(3)");
+            const newGalaxy = Number(galaxyDom.innerHTML) + dir;
+            galaxyDom.innerHTML = newGalaxy >= galaxies.length ? 0 : newGalaxy < 0 ? galaxies.length-1 : newGalaxy
+            break;
+        case 'Size':
+            const sizeDom = document.querySelector("#navFrame>div:nth-child(2)>div:nth-child(3)");
+            const newSize = Number(sizeDom.innerHTML) * Math.pow(10, dir);
+            sizeDom.innerHTML = newSize < 1 ? 1 : newSize
+            break;
+        case 'Zoom':
+            const zoomDom = document.querySelector("#navFrame>div:nth-child(3)>div:nth-child(3)");
+            const newZoom = Number(zoomDom.innerHTML.split("/")[1]) / Math.pow(2, dir);
+            zoomDom.innerHTML = `1/${newZoom < 1 ? 1 : newZoom}`
+            break;
+    }
+    drawMap()
+}
+
+function drawMap (pos) {
+    const galaxy = document.querySelector("#navFrame>div:nth-child(1)>div:nth-child(3)").innerHTML;
+    const size = document.querySelector("#navFrame>div:nth-child(2)>div:nth-child(3)").innerHTML;
+    const zoom = Number(document.querySelector("#navFrame>div:nth-child(3)>div:nth-child(3)").innerHTML.split("/")[1]);
+
+    pos = pos===undefined?(lastPos===undefined?undefined:lastPos):pos
+    lastPos = pos;
+    const systems = formSystems(pos===undefined?galaxies[galaxy].head:pos, galaxies[galaxy].members, size)
+
+    const half = parseInt(parseInt((Math.sqrt(systems.length-1)) + 1) / 2)
+
+    const table = []
+    for(let i=half*-1; i<=half; i++){
+        table[i+half] = []
+        for(let j=half*-1; j<=half; j++){
+            table[i+half][j+half] = '-'
+        }
+    }
+    
+    for(let i=0; i<systems.length; i++){
+        const [x,y] = convertSpiral(i)
+        let r = Math.pow(systems[i].totalSize,0.5) / zoom;
+        if(r<1){r = 1;}
+        table[x+half][y+half] = `<div id=system_${systems[i].id} class="system${systems[i].members.includes(pos)?" selected":""}""><div style="width:${r}px; height:${r}px; border-radius:${r/2}px;" onClick=drawMap('${systems[i].head}')></div><div>Head : ${nodes[systems[i].head].title}<br>TotalSize : ${systems[i].totalSize}<br>Members : ${systems[i].members.length}</div></div></div>`
+    }
+
+    document.getElementById("mapFrame").innerHTML = `<table id=systemTable><tr><td>${table.map(tr => tr.join("</td><td>")).join("</tr><tr><td>")}</td></tr></table>`
+
+    const tableDom = document.querySelector("#systemTable");
+
+    Object.assign(tableDom.style, {
+        position: "absolute",
+        top: (document.querySelector("#mapFrame").offsetHeight - tableDom.offsetHeight)/2,
+        left: (document.querySelector("#mapFrame").offsetWidth - tableDom.offsetWidth)/2
+    })
+}
+
+function fixTextSize (text, size) {
+    const substr = text.substr(0, size-3)
+    if(substr.length == size-3){return `${substr}...`}
+    return substr.padEnd(size, '&nbsp;')
+}
+
+function drawSystem (x, y, system) {
+    console.log(x, y, system)
+}
+
+function convertSpiral (index) {
+    let x = 0
+    let y = 0
+    let r = 1
+    let xy = 0
+    let xd = 1
+    let yd = 1
+    for(let i=0; i<index; i++){
+        if(xy == 0){
+            x += xd;
+            if(x >= r || x <= r*-1){xd *= -1; xy = 1;}
+        }else{
+            y += yd;
+            if(y >= r || y <= r*-1){yd *= -1; xy = 0;}
+            if(y <= r*-1){r++;}
+        }
+    }
+
+    return [x,y]
+}
+
+function formSystems (start, planets, size) {
+    const dead = {}    
+    const queue = [[start,-1]]
+    const result = []
+    for(let i=0; i<queue.length; i++){
+        const system = gatherSystem(queue[i][0], dead, size);
+        if(system.totalSize == 0){continue;}
+        result.push({id : result.length, ...system})
+        system.members.map(i => dead[i] = 1)
+        extractOutsideConnection(system.members).map(x => dead[x] ? 0 : queue.push([x, result.length-1]))
+    }
+
+    return result
+}
+
+function extractOutsideConnection (members) {
+    const connections = {}
+    members.map(member => nodes[member].connection ?
+        Object.keys(nodes[member].connection).map(j => {connections[j] = 1}) 
+    : 0)
+
+    const result = []
+    Object.keys(connections).map(i => members.includes(i) ? 0 : result.push(i))
+    return result.filter((x, i, self) => self.indexOf(x) === i)
+}
+
+function gatherSystem (from, dead, until) {
+    const result = {head : from, headSize : nodes[from].size, totalSize : 0, members : []}
+
+    const queue = [from];
+    let size = 0;
+    for(let i=0; i<queue.length; i++){
+        if(dead[queue[i]]){continue}
+        dead[queue[i]] = 1;
+
+        size += nodes[queue[i]].size
+        result.totalSize += nodes[queue[i]].size
+        result.members.push(queue[i])
+        if(nodes[queue[i]].size > result.headSize){
+            result.head = queue[i];
+            result.headSize = nodes[queue[i]].size
+        }
+        if(size >= until){return result}
+
+        Object.keys(nodes[queue[i]].connection).map(i => dead[i] ? 0 : queue.push(i))
+    }
+
+    return result
+}
+
+function getConnectedWithDepth (start, dup, depth) {
+    if(nodes[start].connection.length == 0){return [[start, depth]]}
+
+    const result = [[start, depth]]
+    dup[start] = 1;
+    Object.keys(nodes[start].connection).map(key => {
+        if(dup[key]){return;}
+        result.push(...getConnectedWithDepth(key, dup, depth+1))
+    })
+    return result
+}
+
+function panelPreceed (panel) {
+    switch(panel){
+        case 'Nodes' :
+            drawNodeList();
+            break;
+        case 'Twits' :
+            drawTwitList();
+            break;
+        case 'Galaxies' :
+            drawGalaxyList();
+            break;
+    }
+}
+
+function drawMenu () {
+    PANEL_LIST.map(x => {
+        document.getElementById("menuPanel").innerHTML += `
+        <div class=menuItem onClick=switchPanel("${x}")>${x}</div>
+        `;
+    })
+}
+
+window.onload = async () => {
+    drawMenu();
+    
+    console.log(folds)
+    console.log(edges)
+
+//    switchMenu();
+//    switchPanel("Control")
+    convertData()
+}
+</script>
+
+<style>
+html {font-size:9pt; background-color:#000; color:#fff;}
+td{font-size:9pt;}
+
+#header {position:fixed; top:12px; left:12px; width:100%; height:72px; border-bottom:1px dashed #666;}
+.backplate {position:absolute; top:0px; left:0px; width:100%; height:100%; background-color:#000; opacity:0.8; z-index:0;}
+.button {padding:2px 6px; border:1px solid #666; color:#999; border-radius:3px; display:inline-block;}
+.button:hover {border:1px solid #fff; color:#fff; background-color:#333;}
+
+#menuButton {position:absolute; top:12px; right:12px; width:80px; height:24px; line-height:24px; border:1px solid #fff; text-align:center; z-index:10;}
+#menuButton:hover {background-color:#333}
+
+#menuPanel {position:absolute; top:48px; right:12px; width:240px; height:480px; border:1px solid #fff; opacity:0; z-index:-1;}
+#menuPanel.visible {opacity:1; z-index:1;}
+.menuItem {position:relative; z-index:1}
+
+#panelFrame {position:absolute; top:48px; right:280px; width:480px; height:calc(100% - 200px); border:1px solid #fff; opacity:0; z-index:-1;}
+#panelFrame.visible {opacity:1; z-index:1;}
+#panelFrame .text {position:absolute; top:0px; left:0px; width:100%; height:100%; z-index:1; overflow-y:scroll}
+.panel {position:absolute; display:none; z-index:1;}
+.panel.visible {display:block}
+
+
+#mapFrame {position:absolute; top:12px; left:12px; width:calc(100% - 26px); height:calc(100% - 26px); border:1px solid #fff; overflow:hidden;}
+
+#navFrame {position:absolute; bottom:12px; left:12px; width:calc(100% - 24px); text-align:center;}
+#navFrame div {display:inline-block; height:20px; line-height:20px; text-align:center; background-color:#000;}
+#navFrame>div {border:1px solid #fff; margin:0 4px;}
+#navFrame>div>div:nth-child(1) {width:120px; border-right:1px solid #fff;}
+#navFrame>div>div:nth-child(2) {width:20px; border-right:1px solid #fff;}
+#navFrame>div>div:nth-child(2):hover {background-color:#333}
+#navFrame>div>div:nth-child(3) {width:60px; border-right:1px solid #fff;}
+#navFrame>div>div:nth-child(4) {width:20px; }
+#navFrame>div>div:nth-child(4):hover {background-color:#333}
+
+#systemTable td{min-width:64px; min-height:64px;}
+.system>div:first-child {background-color:#333; overflow:hidden;}
+.system>div:first-child:hover {background-color:#999;}
+.system.selected>div:first-child {background-color:#999900;}
+.system.selected>div:first-child {background-color:#fff;}
+.system.selected>div:first-child:hover {background-color:#fff;}
+</style>
+
+<div id=menuButton onClick=switchMenu()>
+    Menu
+</div>
+
+<div id=menuPanel>
+    <div class=backplate></div>
+</div>
+
+<div id=panelFrame>
+    <div class=text>
+        <div id=panel_Control class=panel> 
+            Generate New Testset<br>
+            <table>
+                <tr><td>Creating Node count</td><td><input type=text size=6 id=newNodeCount value=100></td></tr>
+                <tr><td>Creating Twit count</td><td><input type=text size=6 id=newTwitCount value=100></td></tr>
+                <tr><td>Twit amplifier range</td><td><input type=text size=6 id=twitAmpleFrom value=1> ~ <input type=text size=6 id=twitAmpleTo value=100000></td></tr>
+                <tr><td>Twit mention prob</td><td><input type=text size=6 id=twitMentionProb value=0.5></td></tr>
+                <tr><td>Twit mention diminish</td><td><input type=text size=6 id=twitMentionDim value=0.66> (power)</td></tr>
+            </table>
+            <div class=button onClick=generateNewSet()>Generate!</div><br><br>
+        
+            <table>
+                <tr><td>Power of Scale</td><td>size^<input type=text size=6 id=powerOfScale value=0.5></td></tr>
+            </table>
+        </div>
+        <div id=panel_Nodes class=panel>
+            <div class=disp></div>
+        </div>
+        <div id=panel_Twits class=panel>
+            <div class=disp></div>
+        </div>
+        <div id=panel_Galaxies class=panel>
+            <div class=disp></div>
+        </div>
+    </div>
+    <div class=backplate></div>
+</div>
+
+<div id=mapFrame>
+
+</div>
+
+<div id=navFrame>
+    <div class=item><div>Switch Galaxy</div><div onClick="navigateMap('Galaxy',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>0</div><div onClick="navigateMap('Galaxy',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
+    <div class=item><div>System Size</div><div onClick="navigateMap('Size',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>10000</div><div onClick="navigateMap('Size',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
+    <div class=item><div>Zoom Scale</div><div onClick="navigateMap('Zoom',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>1/4</div><div onClick="navigateMap('Zoom',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
+</div>
