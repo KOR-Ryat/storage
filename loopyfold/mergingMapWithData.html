@@ -1,6 +1,6 @@
 <script src=./data.js charset=utf-8></script>
 <script>
-const PANEL_LIST = ["Control","Nodes","Twits","Galaxies"];
+const PANEL_LIST = ["Control","Folds","Twits","Galaxies","Info"];
 
 let nodes = {};
 let twits = {};
@@ -18,30 +18,27 @@ function convertData () {
         }
     })
 
-    const twitAmpleTo = document.getElementById("twitAmpleTo").value;
-    const twitAmpleFrom = document.getElementById("twitAmpleFrom").value;
     const twitMentionProb = document.getElementById("twitMentionProb").value;
-    const twitMentionDim = document.getElementById("twitMentionDim").value;
+    const MPD = document.getElementById("MPD").value;
+    const BMP = document.getElementById("BMP").value;
     edges.map(edge => {
         const mentions = [edge.source, edge.target]
-        const base = twitAmpleFrom + parseInt(Math.random() * (twitAmpleTo - twitAmpleFrom + 1))
-        const dim = parseInt(base * Math.pow(twitMentionDim, mentions.length))
+        const mentionPower = parseInt(BMP * Math.pow(MPD, mentions.length))
         
         for(let j=0; j<mentions.length; j++){
             nodes[mentions[j]].ref.push(mentions[j]);
-            nodes[mentions[j]].size += dim;
+            nodes[mentions[j]].size += mentionPower;
             for(let k=0; k<mentions.length; k++){
                 if(j==k){continue;}
                 if(!nodes[mentions[j]].connection[mentions[k]]){nodes[mentions[j]].connection[mentions[k]] = 0;}
-                nodes[mentions[j]].connection[mentions[k]] += dim;
+                nodes[mentions[j]].connection[mentions[k]] += mentionPower;
             }
         }
 
         twits[edge.id] = {
             id : edge.id, 
             mentions,
-            base,
-            dim
+            mentionPower
         }
     })
 
@@ -56,16 +53,16 @@ function generateNewSet () {
     for(let i=0; i<document.getElementById("newNodeCount").value; i++){
         nodes.push({
             id : i,
+            title : '#'+i,
             size : 1,
             ref : [],
             connection : {}
         })
     }
 
-    const twitAmpleTo = document.getElementById("twitAmpleTo").value;
-    const twitAmpleFrom = document.getElementById("twitAmpleFrom").value;
     const twitMentionProb = document.getElementById("twitMentionProb").value;
-    const twitMentionDim = document.getElementById("twitMentionDim").value;
+    const MPD = document.getElementById("MPD").value;
+    const BMP = document.getElementById("BMP").value;
     twits = [];
     for(let i=0; i<document.getElementById("newTwitCount").value; i++){
         let mentionCount = 1;
@@ -77,8 +74,7 @@ function generateNewSet () {
             break;
         }
 
-        const base = twitAmpleFrom + parseInt(Math.random() * (twitAmpleTo - twitAmpleFrom + 1))
-        const dim = parseInt(base * Math.pow(twitMentionDim, mentionCount-1))
+        const mentionPower = parseInt(BMP * Math.pow(MPD, mentionCount-1))
 
         const mentions = []
         for(let j=0; j<mentionCount; j++){
@@ -87,19 +83,18 @@ function generateNewSet () {
 
         for(let j=0; j<mentionCount; j++){
             nodes[mentions[j]].ref.push(i);
-            nodes[mentions[j]].size += dim;
+            nodes[mentions[j]].size += mentionPower;
             for(let k=0; k<mentionCount; k++){
                 if(j==k){continue;}
                 if(!nodes[mentions[j]].connection[mentions[k]]){nodes[mentions[j]].connection[mentions[k]] = 0;}
-                nodes[mentions[j]].connection[mentions[k]] += dim;
+                nodes[mentions[j]].connection[mentions[k]] += mentionPower;
             }
         }
         
         twits.push({
             id : i, 
             mentions,
-            base,
-            dim
+            mentionPower
         })
     }
 
@@ -153,19 +148,19 @@ function getConnected (start, dup) {
 }
 
 function drawNodeList () {
-    document.querySelector("#panel_Nodes>.disp").innerHTML = `<table><tr><td>ID</td><td>Size</td><td>RefBy</td><td>Connection</td></tr>
+    document.querySelector("#panel_Folds>.disp").innerHTML = `<table><tr><td>Title</td><td>Size</td><td>RefBy</td><td>Connection</td></tr>
     ${Object.keys(nodes).map(key => {
         const node = nodes[key]
-        return `<tr><td>${node.id}</td><td>${node.size}</td><td>${node.ref.join(",")}</td><td>${Object.keys(node.connection).map(i => `${i} : ${node.connection[i]}`).join("<br>")}</td></tr>`
+        return `<tr><td>${node.title}</td><td>${node.size}</td><td>${node.ref.join("<br>")}</td><td>${Object.keys(node.connection).map(i => `${nodes[i].title} : ${node.connection[i]}`).join("<br>")}</td></tr>`
     }
     ).join('')}</table>`
 }
 
 function drawTwitList () {
-    document.querySelector("#panel_Twits>.disp").innerHTML = `<table><tr><td>ID</td><td>Base</td><td>Power</td><td>Mentions</td></tr>
+    document.querySelector("#panel_Twits>.disp").innerHTML = `<table><tr><td>ID</td><td>Power</td><td>Mentions</td></tr>
     ${Object.keys(twits).map(key => {
         const twit = twits[key]
-        return `<tr><td>${twit.id}</td><td>${twit.base}</td><td>${twit.dim}</td><td>${twit.mentions.join(",")}</td></tr>`
+        return `<tr><td>${twit.id}</td><td>${twit.mentionPower}</td><td>${twit.mentions.join(",")}</td></tr>`
     }).join('')}</table>`
 }
 
@@ -218,7 +213,7 @@ function navigateMap (func, dir) {
         case 'Zoom':
             const zoomDom = document.querySelector("#navFrame>div:nth-child(3)>div:nth-child(3)");
             const newZoom = Number(zoomDom.innerHTML.split("/")[1]) / Math.pow(2, dir);
-            zoomDom.innerHTML = `1/${newZoom < 1 ? 1 : newZoom}`
+            zoomDom.innerHTML = `1/${newZoom < 1/16 ? 1/16 : newZoom}`
             break;
     }
     drawMap()
@@ -231,7 +226,8 @@ function drawMap (pos) {
 
     pos = pos===undefined?(lastPos===undefined?undefined:lastPos):pos
     lastPos = pos;
-    const systems = formSystems(pos===undefined?galaxies[galaxy].head:pos, galaxies[galaxy].members, size)
+//    const systems = formSystems(pos===undefined?galaxies[galaxy].head:pos, galaxies[galaxy].members, size)
+    const systems = formSystemsWithWeight(pos===undefined?galaxies[galaxy].head:pos, galaxies[galaxy].members, size)
 
     const half = parseInt(parseInt((Math.sqrt(systems.length-1)) + 1) / 2)
 
@@ -247,7 +243,7 @@ function drawMap (pos) {
         const [x,y] = convertSpiral(i)
         let r = Math.pow(systems[i].totalSize,0.5) / zoom;
         if(r<1){r = 1;}
-        table[x+half][y+half] = `<div id=system_${systems[i].id} class="system${systems[i].members.includes(pos)?" selected":""}""><div style="width:${r}px; height:${r}px; border-radius:${r/2}px;" onClick=drawMap('${systems[i].head}')></div><div>Head : ${nodes[systems[i].head].title}<br>TotalSize : ${systems[i].totalSize}<br>Members : ${systems[i].members.length}</div></div></div>`
+        table[x+half][y+half] = `<div id=system_${systems[i].id} class="system${systems[i].members.includes(pos)?" selected":""}""><div style="width:${r}px; height:${r}px; border-radius:${r/2}px;" onClick=drawMap('${systems[i].head}')></div><div>Head : ${nodes[systems[i].head].title}<br>Distance : ${systems[i].distance}<br>TotalSize : ${systems[i].totalSize}<br>Members : ${systems[i].members.length}</div></div></div>`
     }
 
     document.getElementById("mapFrame").innerHTML = `<table id=systemTable><tr><td>${table.map(tr => tr.join("</td><td>")).join("</tr><tr><td>")}</td></tr></table>`
@@ -342,6 +338,67 @@ function gatherSystem (from, dead, until) {
     return result
 }
 
+function formSystemsWithWeight (start, planets, size) {
+    return cutOffSystem(sortByDistance(surveyDistance(start, planets)), size)
+}
+
+function cutOffSystem (planets, systemSize) {
+    console.log(planets)
+    const result = []
+
+    let pointer = 0;
+    for(let i=0; i<planets.length; i++){
+        if(!result[pointer]){
+            result[pointer] = {
+                head : 0,
+                headSize : 0,
+                totalSize : 0,
+                members : [],
+                distance : planets[i][1]
+            }
+        }
+
+        result[pointer].members.push(planets[i][0])
+
+        if(result[pointer].headSize < nodes[planets[i][0]].size){
+            result[pointer].head = planets[i][0]
+            result[pointer].headSize = nodes[planets[i][0]].size
+        }
+
+        result[pointer].totalSize += nodes[planets[i][0]].size
+        if(result[pointer].totalSize > systemSize){pointer++}
+    }
+
+    return result
+}
+    
+function sortByDistance (dist) {
+    return Object.keys(dist).map(x => [x, dist[x]]).sort((a,b) => a[1]-b[1])
+}
+
+function surveyDistance (from, targets) {
+    const DWM = document.getElementById("DWM").value;
+
+    const dead = {from:1}
+    const result = {}
+    const queue = [[from,0]]
+
+    for(let i=0; i<queue.length; i++){
+        Object.keys(nodes[queue[i][0]].connection).map(j => {
+            const key = j
+            const node = nodes[queue[i][0]]
+            const dist = queue[i][1] + Math.floor(1/Math.pow(nodes[queue[i][0]].connection[key]/nodes[queue[i][0]].size,DWM))
+            result[key] = result[key]?Math.min(result[key], dist):dist
+            dead[key] ? 0 : queue.push([key, dist])
+            dead[key] = true;
+        })
+        queue.sort((a,b) => a[1]>b[1])
+    }
+
+    result[from] = 0
+    return result
+}
+
 function getConnectedWithDepth (start, dup, depth) {
     if(nodes[start].connection.length == 0){return [[start, depth]]}
 
@@ -356,7 +413,7 @@ function getConnectedWithDepth (start, dup, depth) {
 
 function panelPreceed (panel) {
     switch(panel){
-        case 'Nodes' :
+        case 'Folds' :
             drawNodeList();
             break;
         case 'Twits' :
@@ -404,7 +461,7 @@ td{font-size:9pt;}
 #menuPanel.visible {opacity:1; z-index:1;}
 .menuItem {position:relative; z-index:1}
 
-#panelFrame {position:absolute; top:48px; right:280px; width:480px; height:calc(100% - 200px); border:1px solid #fff; opacity:0; z-index:-1;}
+#panelFrame {position:absolute; top:48px; right:280px; width:calc(100% - 320px); height:calc(100% - 200px); border:1px solid #fff; opacity:0; z-index:-1;}
 #panelFrame.visible {opacity:1; z-index:1;}
 #panelFrame .text {position:absolute; top:0px; left:0px; width:100%; height:100%; z-index:1; overflow-y:scroll}
 .panel {position:absolute; display:none; z-index:1;}
@@ -446,17 +503,20 @@ td{font-size:9pt;}
             <table>
                 <tr><td>Creating Node count</td><td><input type=text size=6 id=newNodeCount value=100></td></tr>
                 <tr><td>Creating Twit count</td><td><input type=text size=6 id=newTwitCount value=100></td></tr>
-                <tr><td>Twit amplifier range</td><td><input type=text size=6 id=twitAmpleFrom value=1> ~ <input type=text size=6 id=twitAmpleTo value=100000></td></tr>
                 <tr><td>Twit mention prob</td><td><input type=text size=6 id=twitMentionProb value=0.5></td></tr>
-                <tr><td>Twit mention diminish</td><td><input type=text size=6 id=twitMentionDim value=0.66> (power)</td></tr>
             </table>
             <div class=button onClick=generateNewSet()>Generate!</div><br><br>
         
+            Configuration Values<br>
             <table>
-                <tr><td>Power of Scale</td><td>size^<input type=text size=6 id=powerOfScale value=0.5></td></tr>
+                <tr><td>Mention power diminishing</td><td><input type=text size=6 id=MPD value=0.66></td></tr>
+                <tr><td>Base mention power</td><td><input type=text size=6 id=BMP value=100></td></tr>
+                <tr><td>Depth weighting modifier</td><td><input type=text size=6 id=DWM value=1></td></tr>
             </table>
+            <div class=button onClick=convertData()>Apply</div>
+            <br><br>
         </div>
-        <div id=panel_Nodes class=panel>
+        <div id=panel_Folds class=panel>
             <div class=disp></div>
         </div>
         <div id=panel_Twits class=panel>
@@ -464,6 +524,33 @@ td{font-size:9pt;}
         </div>
         <div id=panel_Galaxies class=panel>
             <div class=disp></div>
+        </div>
+        <div id=panel_Info class=panel>
+            <xmp>
+            # Terms
+            Node is equal to fold in this page
+            System = Consists of some neighbor Folds
+            Galaxy = Consists of all connected Folds
+            Connection = Linked path of mentioned planets as a result of Twit
+            Twit = An article that contains 1 or more mentions
+            Mention = Reference a Fold in Twit
+
+            # Absolute Values (Configuration)
+            MPD = Mention power diminishing, Current default : 0.66
+            BMP = Base mention power, Current default : 100
+            DWM = Depth weighting modifier, Current default : 1
+
+            # Static Values (Does not change without new data)
+            MP(A) = Mention power for a mention = Max([BMP * MPD ^(Total mention count of A - 1)], 1)
+            CP(A,B) = Connection power between A and B = Summation of (MP(A), where A mentioned both A and B)
+            CW(A,B) = Connection weight from A to B = CP(A,B) / Total size of A
+            WD(A,B) = Weighted Depth from A to B = [1 / CW(A,B)^DWM]
+
+            # Dynamic Values (Different for each situation)
+            D(A,B) = Distance between A and B = WD(A,B) or 
+             Summation of (Distance of Path from A to B), if A and B is not neighbor
+            * Note that D(A,B) is NOT shortest one from A to B, just a result of searching
+            </xmp>
         </div>
     </div>
     <div class=backplate></div>
@@ -475,6 +562,6 @@ td{font-size:9pt;}
 
 <div id=navFrame>
     <div class=item><div>Switch Galaxy</div><div onClick="navigateMap('Galaxy',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>0</div><div onClick="navigateMap('Galaxy',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
-    <div class=item><div>System Size</div><div onClick="navigateMap('Size',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>10000</div><div onClick="navigateMap('Size',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
-    <div class=item><div>Zoom Scale</div><div onClick="navigateMap('Zoom',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>1/4</div><div onClick="navigateMap('Zoom',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
+    <div class=item><div>System Size</div><div onClick="navigateMap('Size',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>1000</div><div onClick="navigateMap('Size',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
+    <div class=item><div>Zoom Scale</div><div onClick="navigateMap('Zoom',1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">+</div><div>1/0.5</div><div onClick="navigateMap('Zoom',-1)" onmousedown="event.preventDefault ? event.preventDefault() : event.returnValue = false">-</div></div>
 </div>
